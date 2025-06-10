@@ -15,9 +15,9 @@ st.set_page_config(
 )
 
 # --- Groq API Configuration ---
-# It's better practice to use st.secrets for API keys, but using the provided one directly for this case.
+# Use Streamlit secrets for the API key for better security.
 if "GROQ_API_KEY" not in st.secrets:
-    st.error("Please set your Groq API key in the Streamlit secrets manager.")
+    st.error("Please set your Groq API key in the Streamlit secrets manager (e.g., .streamlit/secrets.toml).")
     st.stop()
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
@@ -57,7 +57,7 @@ After its calculation, the function must produce one final answer. This answer m
 **Your Objective: Maximize Accuracy**
 Your primary goal is to make your function's predictions as close as possible to the actual choices in the data provided below. Analyze the data to find the hidden rule that connects the four inputs to the final choice. There is an answer that would reach 100% accuracy. Do not stop until you find it.
 
-Return **ONLY** the complete and runnable Python code for the `predict_choice_proportions` function. Do not include any text or explanations before or after the code.
+Return **ONLY** the complete and runnable Python code for the `predict_choice_proportions` function.
 
 **Here is the data for you to analyze:**
 ```
@@ -67,9 +67,6 @@ Return **ONLY** the complete and runnable Python code for the `predict_choice_pr
 
 GUIDED_PROMPT = """
 You are a computer scientist and logician. Your mission is to write a Python function that perfectly replicates the decision rule shown in a dataset.
-
-**Your Task:**
-Create a Python function named `predict_choice_proportions`. Add any import statements as well to make the model work. Do not include any explanations or markdown formatting. Just the plain Python code.
 
 **The Decision Agent:**
 The agent you are modeling is a simple, deterministic machine. It is not a human and has no uncertainty.
@@ -84,7 +81,7 @@ To find the rule, consider how a rational machine would combine the probability 
 
 Implement the discovered rule in your function to achieve 100% accuracy.
 
-Return **ONLY** the complete and runnable Python code. Do not include any explanations.
+Return **ONLY** the complete and runnable Python code.
 
 **Here is the data for you to analyze:**
 ```
@@ -124,9 +121,9 @@ def call_groq_api(prompt):
         # Get raw content from response
         model_code = result['choices'][0]['message']['content']
 
-        # --- NEW: Remove markdown code block fences ---
-        model_code = re.sub(r"```(?:python)?", "", model_code, flags=re.IGNORECASE)
-        model_code = re.sub(r"```", "", model_code)
+        # Robustly remove markdown code block fences
+        model_code = re.sub(r"```(?:python)?\s*", "", model_code, flags=re.IGNORECASE)
+        model_code = re.sub(r"```\s*", "", model_code)
         model_code = model_code.strip()
 
         st.success("API call successful. Extracted model code.")
@@ -233,9 +230,12 @@ if st.session_state.step == 2:
     )
     
     prompt_template = prompt_options[selected_prompt_name]
+    
+    data_summary_text = st.session_state.get('editable_data', pd.DataFrame()).to_string()
+    prompt_text = prompt_template.format(data_summary=data_summary_text)
 
     st.subheader("Editable LLM Prompt")
-    st.session_state.llm_prompt = st.text_area("LLM Prompt:", value=prompt_template.format(data_summary=st.session_state.editable_data.to_string()), height=350)
+    st.session_state.llm_prompt = st.text_area("LLM Prompt:", value=prompt_text, height=350)
     
     if st.button("Generate Python Model via API", type="primary"):
         with st.spinner("Calling Groq API... Please wait for the live result."):
@@ -260,7 +260,6 @@ if st.session_state.step == 2:
             if st.button("Use this Model for Testing →", type="primary"):
                 st.session_state.step = 3
                 st.rerun()
-
 # --- STEP 3: Test Model and View Accuracy ---
 if st.session_state.step == 3:
     st.header("Step 3: Test the Model's Accuracy")
@@ -285,7 +284,7 @@ if st.session_state.step == 3:
 
         if model_function:
             st.success("Python model loaded successfully! Running tests...")
-            predictions_A, predictions_B = [], []
+            predictions_A, predictions_B, results = [], [], []
             debug_logs = []
             
             for index, row in data.iterrows():
@@ -295,16 +294,25 @@ if st.session_state.step == 3:
                     debug_logs.append(f"  - Input Data: p_A={row['p_win_A']}, v_A={row['value_A']}, p_B={row['p_win_B']}, v_B={row['value_B']}")
                     
                     pred_A, pred_B = model_function(row['p_win_A'], row['value_A'], row['p_win_B'], row['value_B'])
+                    debug_logs.append(f"  - Model Prediction Proportions: `({pred_A:.2f}, {pred_B:.2f})`")
                     
-                    debug_logs.append(f"  - Model Prediction: `({pred_A}, {pred_B})`")
+                    # Classification Logic
+                    predicted_choice = 'A' if pred_A > pred_B else 'B' if pred_B > pred_A else 'Tie'
+                    actual_choice = 'A' if row['sim_choice_A'] == 1.0 else 'B'
+                    is_correct = (predicted_choice == actual_choice)
+                    results.append("✅ Correct" if is_correct else "❌ Incorrect")
+                    debug_logs.append(f"  - Predicted Winner: **{predicted_choice}**, Actual Winner: **{actual_choice}** -> {'Correct' if is_correct else 'Incorrect'}")
+
                     predictions_A.append(pred_A)
                     predictions_B.append(pred_B)
+
                 except Exception as e:
                     problem_id = row.get('problem_id', f'Index {index}')
                     st.error(f"Error running model on problem_id {problem_id}: {e}")
                     debug_logs.append(f"  - **ERROR**: {e}")
                     predictions_A.append(None)
                     predictions_B.append(None)
+                    results.append("Error")
 
             with st.expander("🔍 View Row-by-Row Testing Details"):
                 st.markdown("\n".join(debug_logs))
@@ -312,27 +320,37 @@ if st.session_state.step == 3:
             results_df = data.copy()
             results_df['model_pred_A'] = predictions_A
             results_df['model_pred_B'] = predictions_B
-            results_df = results_df.dropna(subset=['model_pred_A', 'model_pred_B'])
-
-            if not results_df.empty:
+            results_df['Result'] = results 
+            
+            if results:
                 st.subheader("Model Performance")
-                with st.container(border=True):
-                    st.markdown("##### How is Accuracy Calculated?")
-                    st.markdown("""
-                    Prediction accuracy is measured using **Mean Squared Error (MSE)**. Here’s how it works:
-                    1.  For each problem, we take the difference between the model's prediction and the actual observed choice proportion (e.g., `sim_choice_A` - `model_pred_A`).
-                    2.  This difference is squared to make it positive and to penalize larger errors more heavily.
-                    3.  We calculate the average of these squared differences across all problems.
-                    
-                    **A lower MSE is better**, with an MSE of **0.0** representing a perfect prediction.
-                    """)
+                
+                # --- NEW: Display both metrics side-by-side ---
+                col1, col2 = st.columns(2)
+
+                # Classification Accuracy
+                correct_predictions = results.count("✅ Correct")
+                total_predictions = len(results)
+                accuracy_percent = (correct_predictions / total_predictions) * 100 if total_predictions > 0 else 0
+                with col1:
+                    st.metric(label="Classification Accuracy", value=f"{correct_predictions} / {total_predictions} ({accuracy_percent:.1f}%)")
+                    st.caption("Measures how often the model predicted the correct winner.")
+                
+                # Mean Squared Error
+                try:
                     mse_A = ((results_df['sim_choice_A'] - results_df['model_pred_A'])**2).mean()
                     mse_B = ((results_df['sim_choice_B'] - results_df['model_pred_B'])**2).mean()
                     total_mse = (mse_A + mse_B) / 2
-                    st.metric(label="Overall Model Accuracy (Mean Squared Error)", value=f"{total_mse:.4f}")
+                    with col2:
+                        st.metric(label="Mean Squared Error (MSE)", value=f"{total_mse:.4f}")
+                        st.caption("Measures the avg. squared distance between prediction and reality. Lower is better.")
+                except (TypeError, KeyError):
+                     with col2:
+                        st.metric(label="Mean Squared Error (MSE)", value="N/A")
+                        st.caption("Could not be calculated.")
 
-                st.subheader("Detailed Results")
-                st.dataframe(results_df)
+            st.subheader("Detailed Results")
+            st.dataframe(results_df)
 
         else:
             st.warning("Could not find a valid function named `predict_choice_proportions` in the provided code.")
