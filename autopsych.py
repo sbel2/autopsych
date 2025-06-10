@@ -42,7 +42,7 @@ CHALLENGE_PROMPT = """
 You are an expert data scientist. Your mission is to write a Python function that can predict the choices recorded in a dataset.
 
 **Your Task:**
-Create a Python function named `predict_choice_proportions`. Add any import statements as well to make the model work. Do not include any explanations or markdown formatting. Just the plain Python code.
+Create a Python function named `predict_choice_proportions`. Add any import statements as well to make the model work. Do not include any explanations or markdown formatting. Just the plain Python code. Please make sure there are no syntax errors in the code.
 
 **Function Inputs (The Ingredients):**
 To do its job, the function must accept four specific pieces of information for each decision problem:
