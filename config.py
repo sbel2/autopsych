@@ -2,13 +2,13 @@
 
 import streamlit as st
 
-# --- Groq API Configuration ---
+# --- Google Gemini API Configuration ---
 # Use Streamlit secrets for the API key for better security.
-if "GROQ_API_KEY" not in st.secrets:
-    st.error("Please set your Groq API key in the Streamlit secrets manager (e.g., .streamlit/secrets.toml).")
+if "GOOGLE_API_KEY" not in st.secrets:
+    st.error("Please set your Google API key in the Streamlit secrets manager (e.g., .streamlit/secrets.toml).")
     st.stop()
-GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+GEMINI_MODEL = "gemini-2.5-pro"  # Using the latest Gemini 2.5 Pro model
 
 # --- Embedded CSV Data ---
 EMBEDDED_CSV_DATA = """problem_id,phenomenon_name,A_outcome_1,A_prob_1,A_outcome_2,A_prob_2,A_outcome_3,A_prob_3,B_outcome_1,B_prob_1,B_outcome_2,B_prob_2,B_outcome_3,B_prob_3,B_outcome_4,B_prob_4,B_outcome_5,B_prob_5,B_outcome_6,B_prob_6,B_outcome_7,B_prob_7,B_outcome_8,B_prob_8,%A,%B

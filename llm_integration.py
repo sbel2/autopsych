@@ -1,46 +1,57 @@
 # File: llm_integration.py
 
 import streamlit as st
-import requests
-import json
+import google.generativeai as genai
 import re
 
-def call_groq_api(prompt, api_key, api_url):
-    """Makes a live API call to the Groq service to generate the model."""
-    st.info("Preparing to call Groq API...")
-    payload = {
-        "model": "llama3-8b-8192",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.0, # Set to 0.0 for maximum stability
+def call_gemini_api(prompt, api_key, model_name):
+    """Makes a live API call to the Google Gemini service to generate the model."""
+    st.info("Preparing to call Google Gemini API...")
+    
+    # Configure the API key
+    genai.configure(api_key=api_key)
+    
+    # Create the model
+    generation_config = {
+        "temperature": 0.0,  # Set to 0.0 for maximum stability
+        "top_p": 1,
+        "top_k": 1,
+        "max_output_tokens": 8192,
     }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
+    
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        generation_config=generation_config,
+    )
 
     with st.expander("🔍 View API Request Details"):
-        st.write("Sending the following payload to Groq:")
-        st.json(payload)
+        st.write("Sending the following prompt to Google Gemini:")
+        st.text(prompt)
 
     try:
-        response = requests.post(api_url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()
-        result = response.json()
-
+        response = model.generate_content(prompt)
+        
         with st.expander("🔍 View Full API Response"):
-            st.write("Received the following response from Groq:")
-            st.json(result)
-
-        model_code = result['choices'][0]['message']['content']
-        model_code = re.sub(r"```(?:python)?\s*", "", model_code, flags=re.IGNORECASE)
-        model_code = re.sub(r"```\s*", "", model_code)
+            st.write("Received the following response from Google Gemini:")
+            st.json(response.__dict__)
+        
+        if not response.text:
+            st.error("No text was generated in the response.")
+            return None
+            
+        # Extract code from markdown code blocks if present
+        model_code = response.text
+        if "```" in model_code:
+            model_code = re.sub(r"```(?:python)?\s*", "", model_code, flags=re.IGNORECASE)
+            model_code = re.sub(r"```\s*", "", model_code)
+        
         model_code = model_code.strip()
 
         st.success("API call successful. Extracted model code.")
         return model_code
-    except requests.exceptions.RequestException as e:
+        
+    except Exception as e:
         st.error(f"API Request Failed: {e}")
-        return None
-    except (KeyError, IndexError) as e:
-        st.error(f"Failed to parse API response: {e}. Full response: {response.text}")
+        if hasattr(e, 'response') and hasattr(e.response, 'text'):
+            st.error(f"Error details: {e.response.text}")
         return None

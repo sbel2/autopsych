@@ -2,8 +2,8 @@
 
 import streamlit as st
 import pandas as pd
-from config import GENERAL_PROMPT, GROQ_API_KEY, GROQ_API_URL
-from llm_integration import call_groq_api
+from config import GENERAL_PROMPT, GOOGLE_API_KEY, GEMINI_MODEL
+from llm_integration import call_gemini_api
 
 def render_step2():
     """Renders the UI for Step 2: Model Generation."""
@@ -18,8 +18,8 @@ def render_step2():
     st.session_state.llm_prompt = st.text_area("LLM Prompt:", value=prompt_text, height=400)
 
     if st.button("Generate Python Model via API", type="primary"):
-        with st.spinner("Calling Groq API... Please wait for the live result."):
-            generated_code = call_groq_api(st.session_state.llm_prompt, GROQ_API_KEY, GROQ_API_URL)
+        with st.spinner("Calling Google Gemini API... Please wait for the live result."):
+            generated_code = call_gemini_api(st.session_state.llm_prompt, GOOGLE_API_KEY, GEMINI_MODEL)
             if generated_code:
                 st.session_state.model_code = generated_code
             else:

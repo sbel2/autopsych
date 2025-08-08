@@ -5,3 +5,4 @@ requests
 scipy               # For norm, logistic, etc.
 scikit-learn        # For regression, pipelines, scaling
 statsmodels         # For logistic regression, GLMs, hypothesis testing
+google-generativeai # For Google Gemini API integration
