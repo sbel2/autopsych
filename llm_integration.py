@@ -16,7 +16,7 @@ def call_gemini_api(prompt, api_key, model_name):
         "temperature": 0.0,  # Set to 0.0 for maximum stability
         "top_p": 1,
         "top_k": 1,
-        "max_output_tokens": 8192,
+        "max_output_tokens": 20000,
     }
     
     model = genai.GenerativeModel(

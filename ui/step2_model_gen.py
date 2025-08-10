@@ -10,9 +10,8 @@ def render_step2():
     st.header("Step 2: Generate a Predictive Model with an LLM")
     st.info("Review the prompt below, edit it if needed, and then generate a model with the LLM.")
 
-    prompt_template = GENERAL_PROMPT
     data_summary_text = st.session_state.get('editable_data', pd.DataFrame()).head(10).to_string()
-    prompt_text = prompt_template.format(data_summary=data_summary_text)
+    prompt_text = GENERAL_PROMPT.replace('{{data_summary}}', data_summary_text)
 
     st.subheader("Editable LLM Prompt")
     st.session_state.llm_prompt = st.text_area("LLM Prompt:", value=prompt_text, height=400)

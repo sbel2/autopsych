@@ -41,6 +41,9 @@ EMBEDDED_CSV_DATA = """problem_id,phenomenon_name,A_outcome_1,A_prob_1,A_outcome
 GENERAL_PROMPT = """
 You are an expert data scientist. Your mission is to write a Python function that can predict the choices recorded in a dataset.
 
+Here is a sample of the data you'll be working with:
+{{data_summary}}
+
 **Your Task:**
 Create a Python function named `predict_choice_proportions`. This function should accept a single argument, `problem`, which will be a dictionary or pandas Series representing one row of the dataset. Add any import statements needed to make the model work. Do not include anything other than plain Python code. We are inputting your response straight into a model tester, so any verbal response will only trigger errors. Do not say "here is the python function". Please make sure there are no syntax errors in the code.
 
@@ -52,7 +55,7 @@ To write a stable function, you must follow this exact procedure to parse the ou
 
 1.  **Initialize accumulators:** Create two variables, `ev_a` and `ev_b`, and set both to `0`.
 2.  **Process Option A:** Loop through numbers `i` from 1 to 3. In each iteration:
-    * Construct the keys: `outcome_key = f'A_outcome_{{i}}'` and `prob_key = f'A_prob_{{i}}'`.
+    * Construct the keys: `outcome_key = 'A_outcome_' + str(i)` and `prob_key = 'A_prob_' + str(i)`.
     * Safely get the values from the input `problem` using `problem.get(key)`.
     * Convert both the outcome and probability values to numeric types using `pd.to_numeric(value, errors='coerce')`. This will handle non-numeric strings (like 'p') by turning them into `NaN`.
     * Check if **both** the cleaned outcome and probability are valid numbers using `pd.notna()`.
@@ -65,11 +68,56 @@ After its calculation, the function must return a single tuple containing a matc
 **Your Objective: Build a Probabilistic Model**
 Your goal is to create a model that reflects the noisy, probabilistic nature of human choice, rather than a simple winner-take-all machine.
 
-1.  **Calculate Expected Values (EV):** First, calculate `ev_a` and `ev_b` using the robust procedure described in the "Processing the Input" section.
-2.  **Use a Softmax Function:** Convert the calculated `ev_a` and `ev_b` into choice probabilities using a softmax (Logit) function. The formula for the probability of choosing Option A is:
-    `P(A) = 1 / (1 + np.exp(beta * (ev_b - ev_a)))`
-3.  **Define the `beta` Parameter:** Inside your function, you must define `beta`, which represents choice sensitivity. Based on the scale of the monetary values in the data, a very small `beta` is required to produce non-extreme probabilities. **Use a `beta` value of `0.005`**.
-4.  **Return Probabilities:** Your function should calculate `prob_A` using the formula, calculate `prob_B` as `1 - prob_A`, and return them in a tuple: `(prob_A, prob_B)`.
+here is an example model, please come up with your own:
+
+import pandas as pd
+import numpy as np
+
+def predict_choice_proportions(problem):
+    
+    # 1. Initialize accumulators
+    ev_a = 0.0
+    ev_b = 0.0
+
+    # 2. Process Option A
+    for i in range(1, 4):
+        outcome_key = f'A_outcome_{i}'
+        prob_key = f'A_prob_{i}'
+
+        outcome_val = problem.get(outcome_key)
+        prob_val = problem.get(prob_key)
+
+        outcome_num = pd.to_numeric(outcome_val, errors='coerce')
+        prob_num = pd.to_numeric(prob_val, errors='coerce')
+
+        if pd.notna(outcome_num) and pd.notna(prob_num):
+            ev_a += outcome_num * prob_num
+
+    # 3. Process Option B
+    for i in range(1, 9):
+        outcome_key = f'B_outcome_{i}'
+        prob_key = f'B_prob_{i}'
+
+        outcome_val = problem.get(outcome_key)
+        prob_val = problem.get(prob_key)
+
+        outcome_num = pd.to_numeric(outcome_val, errors='coerce')
+        prob_num = pd.to_numeric(prob_val, errors='coerce')
+
+        if pd.notna(outcome_num) and pd.notna(prob_num):
+            ev_b += outcome_num * prob_num
+
+    # 4. Define beta and calculate softmax probabilities
+    beta = 0.005
+    
+    # Handle potential overflow in np.exp by clipping the difference
+    ev_diff = beta * (ev_b - ev_a)
+    
+    # The softmax formula for P(A)
+    prob_a = 1 / (1 + np.exp(ev_diff))
+    prob_b = 1 - prob_a
+
+    return (prob_a, prob_b)
 
 Return **ONLY** the complete and runnable Python code for the `predict_choice_proportions` function.
 
