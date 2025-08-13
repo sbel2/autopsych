@@ -6,7 +6,20 @@ def predict_choice_proportions(problem):
     Predicts the choice proportions for two options (A and B) based on their
     payoff structures, incorporating principles from behavioral economics.
     """
+    # Formatting helper function
+    def format_number(x):
+        if isinstance(x, (int, float)):
+            return f"{x:.2f}" if x != int(x) else str(int(x))
+        return str(x)
+    
+    print("\n=== Starting Prediction ===")
+    print("Input problem:")
+    for k in sorted(problem.keys()):
+        v = problem[k]
+        if pd.notna(v) and (k.startswith('A_') or k.startswith('B_')):
+            print(f"  {k}: {format_number(v)}")
     # Step 1: Initialize accumulators and parse Option A
+    print("\n--- Parsing Option A ---")
     ev_a = 0.0
     outcomes_a = []
     probs_a = []
@@ -16,11 +29,17 @@ def predict_choice_proportions(problem):
         outcome = pd.to_numeric(problem.get(outcome_key), errors='coerce')
         prob = pd.to_numeric(problem.get(prob_key), errors='coerce')
         if pd.notna(outcome) and pd.notna(prob):
+            print(f"  Outcome {i}: ${format_number(outcome)} (p={format_number(prob)})")
             ev_a += outcome * prob
             outcomes_a.append(outcome)
             probs_a.append(prob)
+    
+    print(f"\n  Expected Value (A): ${format_number(ev_a)}")
+    print(f"  Outcomes: {[format_number(x) for x in outcomes_a]}")
+    print(f"  Probabilities: {[format_number(x) for x in probs_a]}")
 
     # Step 2: Parse Option B
+    print("\n--- Parsing Option B ---")
     ev_b = 0.0
     outcomes_b = []
     probs_b = []
@@ -37,74 +56,118 @@ def predict_choice_proportions(problem):
         prob = pd.to_numeric(raw_prob, errors='coerce')
 
         if pd.notna(outcome) and pd.notna(prob):
+            print(f"  Outcome {i}: ${format_number(outcome)} (p={format_number(prob)})")
             ev_b += outcome * prob
             outcomes_b.append(outcome)
             probs_b.append(prob)
+    
+    print(f"\n  Expected Value (B): ${format_number(ev_b)}")
+    print(f"  Outcomes: {[format_number(x) for x in outcomes_b]}")
+    print(f"  Probabilities: {[format_number(x) for x in probs_b]}")
+    if is_ambiguous_b:
+        print("  Note: Detected ambiguous probabilities in Option B")
 
     # Step 3: Apply behavioral heuristics to calculate subjective utility
+    print("\n--- Applying Behavioral Heuristics ---")
     utility_a, utility_b = ev_a, ev_b
     all_outcomes = outcomes_a + outcomes_b
     max_abs_outcome = max(abs(o) for o in all_outcomes) if all_outcomes else 0
     is_certain_a = len(probs_a) == 1 and probs_a[0] == 1.0
     is_certain_b = len(probs_b) == 1 and probs_b[0] == 1.0
+    
+    print(f"Initial utilities: A=${format_number(utility_a)}, B=${format_number(utility_b)}")
+    print(f"Max absolute outcome: ${format_number(max_abs_outcome)}")
+    print(f"Certainty: A={is_certain_a}, B={is_certain_b}")
 
     # Heuristic for Ambiguity Aversion
     if is_ambiguous_b:
+        old_utility = utility_b
         utility_b *= 0.5
+        print(f"\n[Ambiguity Aversion] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)} (50% penalty)")
 
     # Heuristics for gains and losses
     is_gain_domain = all(o >= 0 for o in all_outcomes) if all_outcomes else False
     has_losses = any(o < 0 for o in all_outcomes)
+    
+    print(f"\nDomain Analysis:")
+    print(f"- Gain domain only: {is_gain_domain}")
+    print(f"- Contains losses: {has_losses}")
 
-    if is_gain_domain:
-        if is_certain_a and max_abs_outcome > 10:
-            utility_a *= 1.25
+    if is_gain_domain and is_certain_a and max_abs_outcome > 10:
+        old_utility = utility_a
+        utility_a *= 1.25
+        print(f"\n[Certainty Effect] A's utility: ${format_number(old_utility)} → ${format_number(utility_a)} (25% bonus)")
 
     if has_losses:
         lambda_factor = 1.05 + 1.2 * (min(max_abs_outcome, 1000) / 1000)
+        print(f"\n[Loss Aversion] Applying λ = {lambda_factor:.2f} to losses")
+        
         def value_function(x):
             return x * lambda_factor if x < 0 else x
         
+        old_utility_a, old_utility_b = utility_a, utility_b
         utility_a = sum(value_function(o) * p for o, p in zip(outcomes_a, probs_a))
         utility_b = sum(value_function(o) * p for o, p in zip(outcomes_b, probs_b))
+        
+        print(f"  A's utility: ${format_number(old_utility_a)} → ${format_number(utility_a)}")
+        print(f"  B's utility: ${format_number(old_utility_b)} → ${format_number(utility_b)}")
 
-        # FINAL IMPROVEMENT: The reflection penalty now also triggers for equal EV (Break-even effect).
+        # Break-even effect
         is_certain_loss_a = is_certain_a and outcomes_a[0] < 0
-        if is_certain_loss_a and all(o <= 0 for o in outcomes_b):
-            # Apply risk-seeking penalty if stakes are high OR if it's a break-even choice.
-            if max_abs_outcome > 10 or ev_a == ev_b:
-                utility_a *= 1.25
+        if is_certain_loss_a and all(o <= 0 for o in outcomes_b) and (max_abs_outcome > 10 or ev_a == ev_b):
+            old_utility = utility_a
+            utility_a *= 1.25
+            print(f"\n[Break-even Effect] A's utility: ${format_number(old_utility)} → ${format_number(utility_a)} (25% bonus)")
 
-    # Heuristic for Splitting Effect
+    # Splitting Effect
     total_abs_ev_check = abs(ev_a) + abs(ev_b)
     if not is_certain_a and not is_certain_b and total_abs_ev_check > 0 and abs(ev_a - ev_b) / total_abs_ev_check < 0.1:
         high_value_threshold = max_abs_outcome * 0.8
         high_value_count_a = sum(1 for o in outcomes_a if o >= high_value_threshold)
         high_value_count_b = sum(1 for o in outcomes_b if o >= high_value_threshold)
         if high_value_count_b > high_value_count_a:
+            old_utility = utility_b
             utility_b *= 1.10
+            print(f"\n[Splitting Effect] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)}")
+            print(f"  High-value threshold: ${format_number(high_value_threshold)}")
+            print(f"  High-value outcomes - A: {high_value_count_a}, B: {high_value_count_b}")
 
-    # Refined Lottery Effect logic
+    # Lottery Effect
     is_lottery_b = any(0 < p < 0.01 for p in probs_b)
     if is_lottery_b:
         if not is_certain_a and not is_certain_b and ev_a > 0 and abs(ev_a - ev_b) / ev_a < 0.1:
+            old_utility = utility_b
             utility_b *= 1.5
+            print(f"\n[Lottery Effect] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)} (50% bonus for close EVs)")
         elif is_certain_a:
             jackpot = max(outcomes_b, default=0)
             certain_payout = outcomes_a[0]
             if certain_payout > 0 and jackpot > 100 * certain_payout:
+                old_utility = utility_b
                 utility_b *= 1.5
+                print(f"\n[Lottery Effect] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)} (50% bonus for large jackpot)")
 
     # Step 4: Convert final utilities into choice proportions
+    print("\n--- Calculating Final Probabilities ---")
+    print(f"Final utilities: A=${format_number(utility_a)}, B=${format_number(utility_b)}")
+    
     total_abs_ev = abs(ev_a) + abs(ev_b)
     if total_abs_ev == 0: total_abs_ev = 1
 
     k = 0.5 / np.log1p(total_abs_ev)
+    print(f"Softmax temperature: k = {k:.4f}")
 
     try:
         exp_diff = np.exp(k * (utility_b - utility_a))
         prop_a = 1 / (1 + exp_diff)
+        print(f"exp(k*(B-A)) = {exp_diff:.4f}")
     except OverflowError:
         prop_a = 0.0 if utility_b > utility_a else 1.0
-
+        print(f"[Warning] Overflow in exp calculation, using prop_a = {prop_a:.4f}")
+    
+    print(f"\nFinal choice probabilities:")
+    print(f"  P(Choose A): {prop_a:.4f}")
+    print(f"  P(Choose B): {1-prop_a:.4f}")
+    print("\n=== End of Prediction ===")
+    
     return (prop_a, 1 - prop_a)

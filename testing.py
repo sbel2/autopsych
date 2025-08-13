@@ -41,11 +41,38 @@ def test_model(model_code: str, data: pd.DataFrame) -> Tuple[pd.DataFrame, Dict[
             try:
                 problem_id = row.get('problem_id', f'Index {index}')
                 debug_logs.append(f"--- \n**Testing Problem ID: {problem_id}**")
-                debug_logs.append("  - **Full Input Row Data:**")
-                debug_logs.append(f"    ```\n{row.to_string()}\n    ```")
 
-                # Get model prediction
+                # Get model prediction with print capture
+                import sys
+                from io import StringIO
+                
+                # Create a string buffer to capture print output
+                old_stdout = sys.stdout
+                sys.stdout = captured_output = StringIO()
+                
+                # Run the model function (will capture its print output)
                 prediction_output = model_function(row)
+                
+                # Restore stdout and get captured output
+                sys.stdout = old_stdout
+                captured_text = captured_output.getvalue()
+                
+                # Clean and add captured output to debug logs
+                if captured_text.strip():
+                    debug_logs.append("  - **Model Debug Output:**")
+                    debug_logs.append("    ```")
+                    # Clean up the output and remove any markdown special characters
+                    clean_lines = []
+                    for line in captured_text.strip().split('\n'):
+                        # Skip empty lines at the start of sections
+                        if not clean_lines and not line.strip():
+                            continue
+                        # Add clean line without any markdown characters
+                        clean_line = line.replace('*', '').replace('_', '').replace('`', '').strip()
+                        if clean_line:  # Only add non-empty lines
+                            clean_lines.append(f"    {clean_line}")
+                    debug_logs.extend(clean_lines)
+                    debug_logs.append("    ```")
 
                 # Validate prediction format
                 if not isinstance(prediction_output, (tuple, list)) or len(prediction_output) != 2:
