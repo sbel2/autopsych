@@ -46,16 +46,35 @@ def render_step2():
 
     st.subheader("Editable Python Model")
     st.info("The LLM might generate code with minor syntax errors. Please fix them before using the model.")
-    st.session_state.model_code = st.text_area("Python Model Code:", value=st.session_state.model_code, height=350, key="model_editor",
-                             placeholder="Click 'Generate Python Model' above to have the LLM create code here.")
-
+    
+    # Text area for editing the model code
+    st.session_state.model_code = st.text_area(
+        "Python Model Code:", 
+        value=st.session_state.model_code, 
+        height=350, 
+        key="model_editor",
+        placeholder="Enter your Python model code here or click 'Generate Python Model' above."
+    )
+    
+    # Navigation buttons at the bottom
     col1, col2 = st.columns(2)
     with col1:
         if st.button("← Go Back to Data"):
             st.session_state.step = 1
             st.rerun()
     with col2:
-        if st.session_state.model_code:
-            if st.button("Use this Model for Testing →", type="primary"):
-                st.session_state.step = 3
-                st.rerun()
+        if st.button("Use this Model for Testing →", type="primary"):
+            try:
+                # Validate the code when proceeding
+                local_namespace = {}
+                exec(st.session_state.model_code, globals(), local_namespace)
+                if 'predict_choice_proportions' not in local_namespace:
+                    st.error("❌ The code must define a function named 'predict_choice_proportions'")
+                else:
+                    st.session_state.step = 3
+                    st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error in model code: {str(e)}")
+    
+    # Show a small info message about the required function
+    st.caption("💡 Make sure your code defines a function named 'predict_choice_proportions' that takes a single argument.")
