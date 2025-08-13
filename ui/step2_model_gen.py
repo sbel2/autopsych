@@ -47,6 +47,17 @@ def render_step2():
     st.subheader("Editable Python Model")
     st.info("The LLM might generate code with minor syntax errors. Please fix them before using the model.")
     
+    # Load best model content if available
+    try:
+        with open('best_model', 'r') as f:
+            best_model_content = f.read()
+        
+        # If no model code in session state yet, use the best model
+        if 'model_code' not in st.session_state or not st.session_state.model_code:
+            st.session_state.model_code = best_model_content
+    except FileNotFoundError:
+        best_model_content = ""
+    
     # Text area for editing the model code
     st.session_state.model_code = st.text_area(
         "Python Model Code:", 
@@ -55,6 +66,12 @@ def render_step2():
         key="model_editor",
         placeholder="Enter your Python model code here or click 'Generate Python Model' above."
     )
+    
+    # Add a button to load the best model
+    if best_model_content:
+        if st.button("🔄 Load Best Model"):
+            st.session_state.model_code = best_model_content
+            st.rerun()
     
     # Navigation buttons at the bottom
     col1, col2 = st.columns(2)
