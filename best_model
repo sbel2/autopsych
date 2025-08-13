@@ -1,0 +1,110 @@
+import pandas as pd
+import numpy as np
+
+def predict_choice_proportions(problem):
+    """
+    Predicts the choice proportions for two options (A and B) based on their
+    payoff structures, incorporating principles from behavioral economics.
+    """
+    # Step 1: Initialize accumulators and parse Option A
+    ev_a = 0.0
+    outcomes_a = []
+    probs_a = []
+    for i in range(1, 4):
+        outcome_key = f'A_outcome_{i}'
+        prob_key = f'A_prob_{i}'
+        outcome = pd.to_numeric(problem.get(outcome_key), errors='coerce')
+        prob = pd.to_numeric(problem.get(prob_key), errors='coerce')
+        if pd.notna(outcome) and pd.notna(prob):
+            ev_a += outcome * prob
+            outcomes_a.append(outcome)
+            probs_a.append(prob)
+
+    # Step 2: Parse Option B
+    ev_b = 0.0
+    outcomes_b = []
+    probs_b = []
+    is_ambiguous_b = False
+    for i in range(1, 9):
+        outcome_key = f'B_outcome_{i}'
+        prob_key = f'B_prob_{i}'
+
+        raw_prob = problem.get(prob_key)
+        if isinstance(raw_prob, str) and not raw_prob.replace('.', '', 1).isdigit():
+            is_ambiguous_b = True
+
+        outcome = pd.to_numeric(problem.get(outcome_key), errors='coerce')
+        prob = pd.to_numeric(raw_prob, errors='coerce')
+
+        if pd.notna(outcome) and pd.notna(prob):
+            ev_b += outcome * prob
+            outcomes_b.append(outcome)
+            probs_b.append(prob)
+
+    # Step 3: Apply behavioral heuristics to calculate subjective utility
+    utility_a, utility_b = ev_a, ev_b
+    all_outcomes = outcomes_a + outcomes_b
+    max_abs_outcome = max(abs(o) for o in all_outcomes) if all_outcomes else 0
+    is_certain_a = len(probs_a) == 1 and probs_a[0] == 1.0
+    is_certain_b = len(probs_b) == 1 and probs_b[0] == 1.0
+
+    # Heuristic for Ambiguity Aversion
+    if is_ambiguous_b:
+        utility_b *= 0.5
+
+    # Heuristics for gains and losses
+    is_gain_domain = all(o >= 0 for o in all_outcomes) if all_outcomes else False
+    has_losses = any(o < 0 for o in all_outcomes)
+
+    if is_gain_domain:
+        if is_certain_a and max_abs_outcome > 10:
+            utility_a *= 1.25
+
+    if has_losses:
+        lambda_factor = 1.05 + 1.2 * (min(max_abs_outcome, 1000) / 1000)
+        def value_function(x):
+            return x * lambda_factor if x < 0 else x
+        
+        utility_a = sum(value_function(o) * p for o, p in zip(outcomes_a, probs_a))
+        utility_b = sum(value_function(o) * p for o, p in zip(outcomes_b, probs_b))
+
+        # FINAL IMPROVEMENT: The reflection penalty now also triggers for equal EV (Break-even effect).
+        is_certain_loss_a = is_certain_a and outcomes_a[0] < 0
+        if is_certain_loss_a and all(o <= 0 for o in outcomes_b):
+            # Apply risk-seeking penalty if stakes are high OR if it's a break-even choice.
+            if max_abs_outcome > 10 or ev_a == ev_b:
+                utility_a *= 1.25
+
+    # Heuristic for Splitting Effect
+    total_abs_ev_check = abs(ev_a) + abs(ev_b)
+    if not is_certain_a and not is_certain_b and total_abs_ev_check > 0 and abs(ev_a - ev_b) / total_abs_ev_check < 0.1:
+        high_value_threshold = max_abs_outcome * 0.8
+        high_value_count_a = sum(1 for o in outcomes_a if o >= high_value_threshold)
+        high_value_count_b = sum(1 for o in outcomes_b if o >= high_value_threshold)
+        if high_value_count_b > high_value_count_a:
+            utility_b *= 1.10
+
+    # Refined Lottery Effect logic
+    is_lottery_b = any(0 < p < 0.01 for p in probs_b)
+    if is_lottery_b:
+        if not is_certain_a and not is_certain_b and ev_a > 0 and abs(ev_a - ev_b) / ev_a < 0.1:
+            utility_b *= 1.5
+        elif is_certain_a:
+            jackpot = max(outcomes_b, default=0)
+            certain_payout = outcomes_a[0]
+            if certain_payout > 0 and jackpot > 100 * certain_payout:
+                utility_b *= 1.5
+
+    # Step 4: Convert final utilities into choice proportions
+    total_abs_ev = abs(ev_a) + abs(ev_b)
+    if total_abs_ev == 0: total_abs_ev = 1
+
+    k = 0.5 / np.log1p(total_abs_ev)
+
+    try:
+        exp_diff = np.exp(k * (utility_b - utility_a))
+        prop_a = 1 / (1 + exp_diff)
+    except OverflowError:
+        prop_a = 0.0 if utility_b > utility_a else 1.0
+
+    return (prop_a, 1 - prop_a)
