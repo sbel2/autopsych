@@ -2,70 +2,36 @@ import pandas as pd
 import numpy as np
 
 def predict_choice_proportions(problem):
-    """
-    Predicts the choice proportions for two options (A and B) based on their
-    payoff structures, incorporating principles from behavioral economics.
-    """
-    # Formatting helper function
+
     def format_number(x):
         if isinstance(x, (int, float)):
             return f"{x:.2f}" if x != int(x) else str(int(x))
         return str(x)
-    
-    print("\n=== Starting Prediction ===")
-    print("Input problem:")
+
+    def _parse_option(problem, prefix, max_outcomes):
+        ev = 0.0
+        outcomes = []
+        probs = []
+        for i in range(1, max_outcomes + 1):
+            outcome_key = f'{prefix}_outcome_{i}'
+            prob_key = f'{prefix}_prob_{i}'
+            raw_prob = problem.get(prob_key)
+            outcome = pd.to_numeric(problem.get(outcome_key), errors='coerce')
+            prob = pd.to_numeric(raw_prob, errors='coerce')
+            if pd.notna(outcome) and pd.notna(prob):
+                ev += outcome * prob
+                outcomes.append(outcome)
+                probs.append(prob)
+        return ev, outcomes, probs
+
     for k in sorted(problem.keys()):
         v = problem[k]
         if pd.notna(v) and (k.startswith('A_') or k.startswith('B_')):
             print(f"  {k}: {format_number(v)}")
-    # Step 1: Initialize accumulators and parse Option A
-    print("\n--- Parsing Option A ---")
-    ev_a = 0.0
-    outcomes_a = []
-    probs_a = []
-    for i in range(1, 4):
-        outcome_key = f'A_outcome_{i}'
-        prob_key = f'A_prob_{i}'
-        outcome = pd.to_numeric(problem.get(outcome_key), errors='coerce')
-        prob = pd.to_numeric(problem.get(prob_key), errors='coerce')
-        if pd.notna(outcome) and pd.notna(prob):
-            print(f"  Outcome {i}: ${format_number(outcome)} (p={format_number(prob)})")
-            ev_a += outcome * prob
-            outcomes_a.append(outcome)
-            probs_a.append(prob)
-    
-    print(f"\n  Expected Value (A): ${format_number(ev_a)}")
-    print(f"  Outcomes: {[format_number(x) for x in outcomes_a]}")
-    print(f"  Probabilities: {[format_number(x) for x in probs_a]}")
 
-    # Step 2: Parse Option B
-    print("\n--- Parsing Option B ---")
-    ev_b = 0.0
-    outcomes_b = []
-    probs_b = []
-    is_ambiguous_b = False
-    for i in range(1, 9):
-        outcome_key = f'B_outcome_{i}'
-        prob_key = f'B_prob_{i}'
-
-        raw_prob = problem.get(prob_key)
-        if isinstance(raw_prob, str) and not raw_prob.replace('.', '', 1).isdigit():
-            is_ambiguous_b = True
-
-        outcome = pd.to_numeric(problem.get(outcome_key), errors='coerce')
-        prob = pd.to_numeric(raw_prob, errors='coerce')
-
-        if pd.notna(outcome) and pd.notna(prob):
-            print(f"  Outcome {i}: ${format_number(outcome)} (p={format_number(prob)})")
-            ev_b += outcome * prob
-            outcomes_b.append(outcome)
-            probs_b.append(prob)
-    
-    print(f"\n  Expected Value (B): ${format_number(ev_b)}")
-    print(f"  Outcomes: {[format_number(x) for x in outcomes_b]}")
-    print(f"  Probabilities: {[format_number(x) for x in probs_b]}")
-    if is_ambiguous_b:
-        print("  Note: Detected ambiguous probabilities in Option B")
+    # Step 1 & 2: Call the helper function to parse both options
+    ev_a, outcomes_a, probs_a = _parse_option(problem, 'A', 3)
+    ev_b, outcomes_b, probs_b = _parse_option(problem, 'B', 8)
 
     # Step 3: Apply behavioral heuristics to calculate subjective utility
     print("\n--- Applying Behavioral Heuristics ---")
@@ -78,12 +44,6 @@ def predict_choice_proportions(problem):
     print(f"Initial utilities: A=${format_number(utility_a)}, B=${format_number(utility_b)}")
     print(f"Max absolute outcome: ${format_number(max_abs_outcome)}")
     print(f"Certainty: A={is_certain_a}, B={is_certain_b}")
-
-    # Heuristic for Ambiguity Aversion
-    if is_ambiguous_b:
-        old_utility = utility_b
-        utility_b *= 0.5
-        print(f"\n[Ambiguity Aversion] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)} (50% penalty)")
 
     # Heuristics for gains and losses
     is_gain_domain = all(o >= 0 for o in all_outcomes) if all_outcomes else False
@@ -100,28 +60,34 @@ def predict_choice_proportions(problem):
 
     if has_losses:
         lambda_factor = 1.05 + 1.2 * (min(max_abs_outcome, 1000) / 1000)
-        print(f"\n[Loss Aversion] Applying λ = {lambda_factor:.2f} to losses")
+        print(f"\n[Loss Aversion] Applying general λ = {lambda_factor:.2f} to all losses")
         
         def value_function(x):
             return x * lambda_factor if x < 0 else x
         
-        old_utility_a, old_utility_b = utility_a, utility_b
+        old_utility_a, old_utility_b = ev_a, ev_b
         utility_a = sum(value_function(o) * p for o, p in zip(outcomes_a, probs_a))
         utility_b = sum(value_function(o) * p for o, p in zip(outcomes_b, probs_b))
         
         print(f"  A's utility: ${format_number(old_utility_a)} → ${format_number(utility_a)}")
         print(f"  B's utility: ${format_number(old_utility_b)} → ${format_number(utility_b)}")
 
-        # Break-even effect
-        is_certain_loss_a = is_certain_a and outcomes_a[0] < 0
-        if is_certain_loss_a and all(o <= 0 for o in outcomes_b) and (max_abs_outcome > 10 or ev_a == ev_b):
-            old_utility = utility_a
-            utility_a *= 1.25
-            print(f"\n[Break-even Effect] A's utility: ${format_number(old_utility)} → ${format_number(utility_a)} (25% bonus)")
+        is_certain_loss_a = is_certain_a and outcomes_a and outcomes_a[0] < 0
+        is_risky_loss_b = not is_certain_b and outcomes_b and all(o <= 0 for o in outcomes_b)
+
+        if is_certain_loss_a and is_risky_loss_b:
+            # breakeven effect or big loss effect
+            if utility_a == utility_b or max_abs_outcome > 10:
+                risk_seeking_factor = 0.80
+                old_utility = utility_b
+                utility_b *= risk_seeking_factor
+                print(f"\n[Certainty Effect for Losses] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)}")
+
 
     # Splitting Effect
-    total_abs_ev_check = abs(ev_a) + abs(ev_b)
-    if not is_certain_a and not is_certain_b and total_abs_ev_check > 0 and abs(ev_a - ev_b) / total_abs_ev_check < 0.1:
+    positive_outcomes_a = sum(1 for o in outcomes_a if o > 0)
+    positive_outcomes_b = sum(1 for o in outcomes_b if o > 0)
+    if not is_certain_a and not is_certain_b and is_gain_domain and positive_outcomes_b > 1 and positive_outcomes_a > 1:
         high_value_threshold = max_abs_outcome * 0.8
         high_value_count_a = sum(1 for o in outcomes_a if o >= high_value_threshold)
         high_value_count_b = sum(1 for o in outcomes_b if o >= high_value_threshold)
@@ -132,20 +98,16 @@ def predict_choice_proportions(problem):
             print(f"  High-value threshold: ${format_number(high_value_threshold)}")
             print(f"  High-value outcomes - A: {high_value_count_a}, B: {high_value_count_b}")
 
-    # Lottery Effect
+    positive_outcomes_b = sum(1 for o in outcomes_b if o > 0)
     is_lottery_b = any(0 < p < 0.01 for p in probs_b)
-    if is_lottery_b:
-        if not is_certain_a and not is_certain_b and ev_a > 0 and abs(ev_a - ev_b) / ev_a < 0.1:
-            old_utility = utility_b
+
+    # The Lottery Effect should only apply to SIMPLE gambles (e.g., 1 or 2 positive outcomes)
+    if is_certain_a and is_lottery_b and positive_outcomes_b <= 2:
+        jackpot = max(outcomes_b, default=0)
+        certain_payout = outcomes_a[0]
+        if jackpot > 20 * certain_payout:
             utility_b *= 1.5
-            print(f"\n[Lottery Effect] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)} (50% bonus for close EVs)")
-        elif is_certain_a:
-            jackpot = max(outcomes_b, default=0)
-            certain_payout = outcomes_a[0]
-            if certain_payout > 0 and jackpot > 100 * certain_payout:
-                old_utility = utility_b
-                utility_b *= 1.5
-                print(f"\n[Lottery Effect] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)} (50% bonus for large jackpot)")
+            print(f"\n[Lottery Effect] B's utility: ${format_number(old_utility)} → ${format_number(utility_b)}")
 
     # Step 4: Convert final utilities into choice proportions
     print("\n--- Calculating Final Probabilities ---")
