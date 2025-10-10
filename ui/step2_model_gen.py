@@ -59,11 +59,14 @@ def render_step2():
         best_model_content = ""
     
     # Text area for editing the model code
-    st.session_state.model_code = st.text_area(
-        "Python Model Code:", 
-        value=st.session_state.model_code, 
-        height=350, 
-        key="model_editor",
+    # Bind the text area directly to the `model_code` session key so that
+    # widget state stays in sync with the LLM-generated code and does not
+    # accidentally overwrite it with a stale widget value.
+    st.text_area(
+        "Python Model Code:",
+        value=st.session_state.get('model_code', ''),
+        height=350,
+        key="model_code",
         placeholder="Enter your Python model code here or click 'Generate Python Model' above."
     )
     
