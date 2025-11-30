@@ -17,7 +17,10 @@ def render_step3():
     with st.expander("🐍 View Final Model Code to be Executed"):
         st.code(st.session_state.model_code, language='python')
 
-    data = st.session_state.editable_data.copy()
+    # For evaluation, always use the fixed CPC18 test dataset from the project root
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cpc18_path = os.path.join(project_root, "cpc18_test.csv")
+    data = pd.read_csv(cpc18_path)
     model_code = st.session_state.model_code
 
     if not model_code.strip():
