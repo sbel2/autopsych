@@ -19,8 +19,8 @@ def _parse_option(problem, prefix, max_outcomes):
 
 def predict_choice_proportions(problem):
     # Step 1 & 2: Call the helper function to parse both options
-    ev_a, outcomes_a, probs_a = _parse_option(problem, 'A', 3)
-    ev_b, outcomes_b, probs_b = _parse_option(problem, 'B', 8)
+    ev_a, outcomes_a, probs_a = _parse_option(problem, 'A', 10)
+    ev_b, outcomes_b, probs_b = _parse_option(problem, 'B', 10)
 
     # Step 3: Apply behavioral heuristics to calculate subjective utility
     utility_a, utility_b = ev_a, ev_b

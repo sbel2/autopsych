@@ -26,3 +26,4 @@ WARNING: All log messages before absl::InitializeLog() is called are written to 
 E0000 00:00:1760069457.609743  773120 alts_credentials.cc:93] ALTS creds ignored. Not running on GCP and untrusted ALTS is not enabled.
 E0000 00:00:1760069524.555457  774014 alts_credentials.cc:93] ALTS creds ignored. Not running on GCP and untrusted ALTS is not enabled.
 E0000 00:00:1760069868.572613  778982 alts_credentials.cc:93] ALTS creds ignored. Not running on GCP and untrusted ALTS is not enabled.
+  Stopping...

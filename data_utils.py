@@ -10,11 +10,16 @@ def generate_gambling_problems(n_problems):
     """
     data = []
     cols = [
-        "problem_id", "phenomenon_name", "A_outcome_1", "A_prob_1", "A_outcome_2",
-        "A_prob_2", "A_outcome_3", "A_prob_3", "B_outcome_1", "B_prob_1",
-        "B_outcome_2", "B_prob_2", "B_outcome_3", "B_prob_3", "B_outcome_4",
-        "B_prob_4", "B_outcome_5", "B_prob_5", "B_outcome_6", "B_prob_6",
-        "B_outcome_7", "B_prob_7", "B_outcome_8", "B_prob_8", "%A", "%B"
+        "problem_id", "phenomenon_name",
+        "A_outcome_1", "A_prob_1", "A_outcome_2", "A_prob_2", "A_outcome_3", "A_prob_3",
+        "A_outcome_4", "A_prob_4", "A_outcome_5", "A_prob_5", "A_outcome_6", "A_prob_6",
+        "A_outcome_7", "A_prob_7", "A_outcome_8", "A_prob_8", "A_outcome_9", "A_prob_9",
+        "A_outcome_10", "A_prob_10",
+        "B_outcome_1", "B_prob_1", "B_outcome_2", "B_prob_2", "B_outcome_3", "B_prob_3",
+        "B_outcome_4", "B_prob_4", "B_outcome_5", "B_prob_5", "B_outcome_6", "B_prob_6",
+        "B_outcome_7", "B_prob_7", "B_outcome_8", "B_prob_8", "B_outcome_9", "B_prob_9",
+        "B_outcome_10", "B_prob_10",
+        "%A", "%B"
     ]
 
     for i in range(n_problems):
