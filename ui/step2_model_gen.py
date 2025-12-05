@@ -58,24 +58,6 @@ def render_step2():
     except FileNotFoundError:
         best_model_content = ""
     
-    # Text area for editing the model code
-    # Bind the text area directly to the `model_code` session key so that
-    # widget state stays in sync with the LLM-generated code and does not
-    # accidentally overwrite it with a stale widget value.
-    st.text_area(
-        "Python Model Code:",
-        value=st.session_state.get('model_code', ''),
-        height=350,
-        key="model_code",
-        placeholder="Enter your Python model code here or click 'Generate Python Model' above."
-    )
-    
-    # Add a button to load the best model
-    if best_model_content:
-        if st.button("🔄 Load Best Model"):
-            st.session_state.model_code = best_model_content
-            st.rerun()
-    
     # Add a button to load a basic Expected Value (EV) model
     basic_ev_model_code = (
         "import pandas as pd\n"
@@ -127,10 +109,29 @@ def render_step2():
         "    return (prob_a, prob_b)\n"
     )
 
-    if st.button("📦 Load Basic EV Model"):
-        st.session_state.model_code = basic_ev_model_code
-        st.success("Basic EV model loaded into the editor.")
-        st.rerun()
+    # Place model loading buttons BEFORE the text area to avoid Streamlit state lock issues
+    cols = st.columns(2)
+    with cols[0]:
+        if best_model_content:
+            if st.button("🔄 Load Best Model"):
+                st.session_state["model_code"] = best_model_content
+                st.rerun()
+    with cols[1]:
+        if st.button("📦 Load Basic EV Model"):
+            st.session_state["model_code"] = basic_ev_model_code
+            st.rerun()
+
+    # Text area for editing the model code
+    # Bind the text area directly to the `model_code` session key so that
+    # widget state stays in sync with the LLM-generated code and does not
+    # accidentally overwrite it with a stale widget value.
+    st.text_area(
+        "Python Model Code:",
+        value=st.session_state.get('model_code', ''),
+        height=350,
+        key="model_code",
+        placeholder="Enter your Python model code here or click 'Generate Python Model' above."
+    )
     
     # Navigation buttons at the bottom
     col1, col2 = st.columns(2)
