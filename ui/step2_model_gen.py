@@ -76,6 +76,62 @@ def render_step2():
             st.session_state.model_code = best_model_content
             st.rerun()
     
+    # Add a button to load a basic Expected Value (EV) model
+    basic_ev_model_code = (
+        "import pandas as pd\n"
+        "import numpy as np\n\n"
+        "def predict_choice_proportions(problem, temperature=1.0):\n"
+        "    # Calculate Expected Value for Option A\n"
+        "    ev_a = 0.0\n"
+        "    for i in range(1, 11):\n"
+        "        out_key = f\"A_outcome_{i}\"\n"
+        "        prob_key = f\"A_prob_{i}\"\n"
+        "        try:\n"
+        "            val = pd.to_numeric(problem.get(out_key), errors='coerce')\n"
+        "            prob = pd.to_numeric(problem.get(prob_key), errors='coerce')\n"
+        "            if not np.isnan(val) and not np.isnan(prob):\n"
+        "                ev_a += val * prob\n"
+        "        except:\n"
+        "            continue\n\n"
+        "    # Calculate Expected Value for Option B\n"
+        "    ev_b = 0.0\n"
+        "    for i in range(1, 11):\n"
+        "        out_key = f\"B_outcome_{i}\"\n"
+        "        prob_key = f\"B_prob_{i}\"\n"
+        "        try:\n"
+        "            val = pd.to_numeric(problem.get(out_key), errors='coerce')\n"
+        "            prob = pd.to_numeric(problem.get(prob_key), errors='coerce')\n"
+        "            if not np.isnan(val) and not np.isnan(prob):\n"
+        "                ev_b += val * prob\n"
+        "        except:\n"
+        "            continue\n\n"
+        "    # Avoid division by zero if temperature is 0\n"
+        "    if temperature == 0:\n"
+        "        if ev_a > ev_b:\n"
+        "            return (1.0, 0.0)\n"
+        "        elif ev_b > ev_a:\n"
+        "            return (0.0, 1.0)\n"
+        "        else:\n"
+        "            return (0.5, 0.5)\n\n"
+        "    # Softmax / Sigmoid calculation\n"
+        "    # P(A) = 1 / (1 + exp((EV_B - EV_A) / temperature))\n"
+        "    logit_diff = (ev_b - ev_a) / temperature\n\n"
+        "    # Handle potential overflow/underflow for extreme differences\n"
+        "    if logit_diff > 700:\n"
+        "        prob_a = 0.0\n"
+        "    elif logit_diff < -700:\n"
+        "        prob_a = 1.0\n"
+        "    else:\n"
+        "        prob_a = 1.0 / (1.0 + np.exp(logit_diff))\n\n"
+        "    prob_b = 1.0 - prob_a\n\n"
+        "    return (prob_a, prob_b)\n"
+    )
+
+    if st.button("📦 Load Basic EV Model"):
+        st.session_state.model_code = basic_ev_model_code
+        st.success("Basic EV model loaded into the editor.")
+        st.rerun()
+    
     # Navigation buttons at the bottom
     col1, col2 = st.columns(2)
     with col1:
